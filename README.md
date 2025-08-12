@@ -58,10 +58,6 @@ Results 1 pod running and 1 pod completed:
 radiant-minio-bucket-init-job-2znb9   0/1     Completed   0          103s
 radiant-minio-d7cf486cf-22zlg         1/1     Running     0          103s
 ```
-Linux: in a new terminal, run and leave running:
-```
-kubectl port-forward pod/radiant-minio-d7cf486cf-pdl4b 9000:9000
-```
 
 ## Install postgres
 ```
@@ -96,20 +92,25 @@ radiant-iceberg-rest-6f488444f7-rv9gv   1/1     Running     0          17s
 
 On Mac :
 ```
+# install
 brew install minio/stable/mc
+# init
+mc alias set localminio http://127.0.0.1:9000 admin password
+mc mirror data/input_parquet/ localminio/warehouse/input_parquet/
+mc mirror data/vcf/ localminio/vcf/
 ```
 
 Linux:
 ```shell
+# install client
 wget https://dl.min.io/client/mc/release/linux-amd64/mc
 chmod +x mc
-# optional, move to bin:
+# optional, move to bin or some other place on your $PATH:
 sudo mv mc /usr/local/bin/
-```
-
-Init client (all OS)
-```
-mc alias set localminio http://127.0.0.1:9000 admin password
+# init
+kubectl get svc
+# copy the EXTERNAL-IP for your radiant-minio LoadBalancer
+mc alias set localminio http://<EXTERNAL IP>:9000 admin password
 mc mirror data/input_parquet/ localminio/warehouse/input_parquet/
 mc mirror data/vcf/ localminio/vcf/
 ```
@@ -174,10 +175,8 @@ radiant-api-6d58b89d8b-gkf8r             0/1     Running     0          25s
 
 ## Verify the status of the API :
 ```
-kubectl port-forward pod/radiant-api-595ff8df6-vc6md 8090:8090
-```
-```
-curl http://localhost:8090/status
+# On Linux, get the radiant-api external IP from `kubectl get svc`
+curl http://10.105.185.153:8090/status
 # returns {"status":{"postgres":"up","starrocks":"up"}}%
 ```
 
@@ -185,13 +184,6 @@ curl http://localhost:8090/status
 ```
 kubectl apply -f k8s/ui/
 ```
-This image failed to pull. Pulling it manually resulted in the following:
-```
-docker pull ghcr.io/radiant-network/radiant-portal:sha256-930da3986207516dbd3a5111156390ff138e5cc51a97107ea85996fa9ad710e2
-sha256-930da3986207516dbd3a5111156390ff138e5cc51a97107ea85996fa9ad710e2: Pulling from radiant-network/radiant-portal
-unsupported media type application/vnd.oci.empty.v1+json
-```
-I instead pulled `ghcr.io/radiant-network/radiant-portal:latest`, which worked
 
 ## Monitor Frontend pod is running (1 minutes)
 ```
@@ -215,10 +207,6 @@ Then in a new terminal, run the following command to mount the dags directory in
 minikube mount $(pwd)/radiant-portal-pipeline/radiant:/opt/airflow/dags/radiant
 ```
 Let this command run in a separate terminal while you are working with Airflow.
-If this doesn't work, you can copy in the files instead:
-```
-kubectl cp radiant-portal-pipeline/radiant airflow-webserver-85dc7f59c6-65hwj:/opt/airflow/dags
-```
 
 ## Install airflow volumes for logs and dags
 ```
@@ -247,16 +235,16 @@ airflow-worker-0                         2/2     Running     0             4m14s
 ```
 
 ## Configure airflow
-Expose the airflow UI port:
-```
-kubectl port-forward airflow-webserver-6766ff4fcf-ll24w 8080:8080
-```
-
 Connect to the Airflow UI at http://localhost:8080
 - Username: airflow
 - Password: airflow
 
 Then Unpause all the dags by sliding the toggle button of each dag to the right.
+If you see no DAGs, the mountpoint didn't work. You can copy the DAGs into the airflow pod:
+
+```shell
+kubectl cp ../radiant-portal-pipeline/radiant airflow-webserver-7b474f486-8s24n:/opt/airflow/dags
+```
 
 Configure the pools :
 - Go to Admin -> Pools
