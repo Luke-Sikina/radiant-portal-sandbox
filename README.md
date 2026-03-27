@@ -92,8 +92,25 @@ radiant-iceberg-rest-6f488444f7-rv9gv   1/1     Running     0          17s
 
 On Mac :
 ```
+# install
 brew install minio/stable/mc
+# init
 mc alias set localminio http://127.0.0.1:9000 admin password
+mc mirror data/input_parquet/ localminio/warehouse/input_parquet/
+mc mirror data/vcf/ localminio/vcf/
+```
+
+Linux:
+```shell
+# install client
+wget https://dl.min.io/client/mc/release/linux-amd64/mc
+chmod +x mc
+# optional, move to bin or some other place on your $PATH:
+sudo mv mc /usr/local/bin/
+# init
+kubectl get svc
+# copy the EXTERNAL-IP for your radiant-minio LoadBalancer
+mc alias set localminio http://<EXTERNAL IP>:9000 admin password
 mc mirror data/input_parquet/ localminio/warehouse/input_parquet/
 mc mirror data/vcf/ localminio/vcf/
 ```
@@ -158,8 +175,9 @@ radiant-api-6d58b89d8b-gkf8r             0/1     Running     0          25s
 
 ## Verify the status of the API :
 ```
-curl http://localhost:8090/status
-{"status":{"postgres":"up","starrocks":"up"}}%
+# On Linux, get the radiant-api external IP from `kubectl get svc`
+curl http://10.105.185.153:8090/status
+# returns {"status":{"postgres":"up","starrocks":"up"}}%
 ```
 
 ## Install the frontend
@@ -190,7 +208,6 @@ minikube mount $(pwd)/radiant-portal-pipeline/radiant:/opt/airflow/dags/radiant
 ```
 Let this command run in a separate terminal while you are working with Airflow.
 
-
 ## Install airflow volumes for logs and dags
 ```
 kubectl apply -f k8s/airflow/
@@ -203,16 +220,18 @@ helm install airflow apache-airflow/airflow -f values/airflow-values.yaml
 ```
 Took 5 minutes to install Airflow
 
-## Monitor Airflow podd are running (5 minutes)
+## Monitor Airflow pods are running (5 minutes)
 ```
 kubectl get po | grep airflow
 ```
-Results 4 pods running:
+Results 6 pods running:
 ```
-airflow-scheduler-6644cb8c5d-rcncc       2/2     Running     0          99s
-airflow-statsd-75fdf4bc64-7w9sb          1/1     Running     0          99s
-airflow-triggerer-0                      2/2     Running     0          99s
-airflow-webserver-744898d99-nvxrn        1/1     Running     0          99s
+airflow-redis-0                          1/1     Running     0             4m14s
+airflow-scheduler-5ff6dcd4db-gxqbg       2/2     Running     0             4m14s
+airflow-statsd-75fdf4bc64-sgcj6          1/1     Running     0             4m14s
+airflow-triggerer-0                      2/2     Running     0             4m14s
+airflow-webserver-6766ff4fcf-ll24w       1/1     Running     1 (93s ago)   4m14s
+airflow-worker-0                         2/2     Running     0             4m14s
 ```
 
 ## Configure airflow
@@ -221,6 +240,11 @@ Connect to the Airflow UI at http://localhost:8080
 - Password: airflow
 
 Then Unpause all the dags by sliding the toggle button of each dag to the right.
+If you see no DAGs, the mountpoint didn't work. You can copy the DAGs into the airflow pod:
+
+```shell
+kubectl cp ../radiant-portal-pipeline/radiant airflow-webserver-7b474f486-8s24n:/opt/airflow/dags
+```
 
 Configure the pools :
 - Go to Admin -> Pools
@@ -252,7 +276,7 @@ Password: `admin`
 
 Click on `Manage Realms`, then click on `Radiant`.
 
-Click on `Users`, then click on `Create a new User`.
+Click on `Users`, then click on `Add User`.
 
 - Email verified: `ON`
 - Usernane: `user1` (or any username you want)
